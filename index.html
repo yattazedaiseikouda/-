@@ -67,9 +67,16 @@ function save(){
   localStorage.setItem("tasks",JSON.stringify(tasks));
 }
 
-// 🔥 日本時間で取得（完全修正版）
+// 日本時間
 function getToday(){
-  return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
+  return new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Tokyo'});
+}
+
+// 日付加算
+function addDays(dateStr,days){
+  let d=new Date(dateStr);
+  d.setDate(d.getDate()+days);
+  return d.toISOString().split("T")[0];
 }
 
 function endMinusOne(d){
@@ -102,13 +109,15 @@ function distributeTask(t){
   });
 }
 
-// 🔥 0時処理（完全修正版）
+// 🔥 0時処理（30日ルール追加）
 function resetAtMidnight(){
   let today=getToday();
   if(lastCheckDate!==today){
 
-    // 締切過ぎ削除
-    tasks = tasks.filter(t=>t.end >= today);
+    // 締切+30日過ぎたら削除
+    tasks = tasks.filter(t=>{
+      return addDays(t.end,30) >= today;
+    });
 
     // 再配分
     tasks.forEach(t=>{
@@ -123,7 +132,6 @@ function resetAtMidnight(){
   }
 }
 
-// 追加タスクだけ即分配
 function ensureDistribution(){
   tasks.forEach(t=>{
     if(Object.keys(t.dailyRequired).length===0){
@@ -146,7 +154,7 @@ function addTask(){
     dailyRequired:{}
   };
 
-  distributeTask(t); // ← 即分配
+  distributeTask(t);
 
   tasks.push(t);
 
@@ -214,7 +222,10 @@ function render(){
       let s=new Date(t.start);
       let e=new Date(endMinusOne(t.end));
       for(let d=new Date(s);d<=e;d.setDate(d.getDate()+1)){
-        dates[d.toISOString().split("T")[0]]=true;
+        let dateStr=d.toISOString().split("T")[0];
+        if(dateStr >= today){ // 🔥 過去は表示しない
+          dates[dateStr]=true;
+        }
       }
     });
 
