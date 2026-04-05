@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>勉強タスク管理</title>
+
+<style>
+body{
+  font-family:sans-serif;
+  margin:0;
+  background:#f5f5f5;
+  font-size:16px;
+}
+.header{
+  background:#4a90e2;
+  color:white;
+  padding:15px;
+  text-align:center;
+  font-size:18px;
+}
+.nav{
+  display:flex;
+  justify-content:space-around;
+  background:#4a90e2;
+}
+.nav button{
+  flex:1;
+  background:none;
+  border:none;
+  color:white;
+  padding:15px 5px;
+  font-size:14px;
+}
+.nav button.active{
+  color:black;
+  font-weight:bold;
+  background:white;
+  border-radius:8px 8px 0 0;
+}
+.container{
+  padding:10px;
+}
+.box{
+  background:white;
+  padding:12px;
+  margin-bottom:12px;
+  border-radius:10px;
+}
+input, select{
+  width:100%;
+  padding:10px;
+  margin-bottom:8px;
+  font-size:16px;
+  border:1px solid #ccc;
+  border-radius:6px;
+  box-sizing:border-box;
+}
+.box button{
+  width:100%;
+  padding:12px;
+  font-size:16px;
+  background:#4a90e2;
+  color:white;
+  border:none;
+  border-radius:8px;
+}
+.task{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  border-bottom:1px solid #ddd;
+  padding:10px 0;
+}
+.task div:first-child{
+  width:60%;
+  word-break:break-word;
+}
+.task button{
+  padding:8px 10px;
+  margin-left:5px;
+  font-size:14px;
+  border:none;
+  border-radius:6px;
+  background:#4a90e2;
+  color:white;
+}
+.task span{
+  margin:0 6px;
+  font-size:16px;
+}
+.small{
+  font-size:12px;
+  color:#888;
+}
+</style>
+</head>
+
+<body>
+
+<div class="header">今日の学習内容とタスク作成</div>
+
+<div class="nav">
+<button id="btn-today" onclick="changeView('today')">今日</button>
+<button id="btn-deadline" onclick="changeView('deadline')">締切</button>
+<button id="btn-date" onclick="changeView('date')">日付</button>
+</div>
+
+<div class="container">
+
+<div class="box">
+<input id="name" placeholder="タスク名">
+<select id="subject">
+<option>国語</option><option>数学</option><option>英語</option>
+<option>理科</option><option>社会</option><option>その他</option>
+</select>
+<input type="date" id="start">
+<input type="date" id="end">
+<input type="number" id="pages" placeholder="ページ数">
+<button onclick="addTask()">追加</button>
+</div>
+
+<div class="box" id="view"></div>
+
+</div>
+
+<script>
+let tasks = JSON.parse(localStorage.getItem("tasks")||"[]");
+
+tasks.forEach(t=>{
+  if(!t.dailyProgress) t.dailyProgress = {};
+  if(!t.dailyRequired) t.dailyRequired = {};
+  t.totalProgress = Object.values(t.dailyProgress).reduce((a,b)=>a+b,0);
+});
+
+let currentView="today";
+let lastCheckDate = localStorage.getItem("lastCheckDate") || getToday();
+
+document.getElementById("start").value = getToday();
+
+function save(){localStorage.setItem("tasks",JSON.stringify(tasks));}
+function getToday(){return new Date().toISOString().split("T")[0];}
+
+function endMinusOne(d){
+  let x=new Date(d);
+  x.setDate(x.getDate()-1);
+  return x.toISOString().split("T")[0];
+}
+
+// 分配
+function distributeTask(t){
+  let start = t.start;
+  let end = endMinusOne(t.end);
+
+  let dates=[];
+  for(let d=new Date(start);d<=new Date(end);d.setDate(d.getDate()+1)){
+    dates.push(new Date(d).toISOString().split("T")[0]);
+  }
+
+  let done = Object.values(t.dailyProgress).reduce((a,b)=>a+b,0);
+  let remaining = t.pages - done;
+
+  let days = dates.length;
+  if(days<=0) return;
+
+  let base = Math.floor(remaining / days);
+  let extra = remaining % days;
+
+  dates.forEach((date,i)=>{
+    t.dailyRequired[date] = base + (i < extra ? 1 : 0);
+  });
+}
+
+// 🔥 ここが重要（仕様の核）
+function cleanTasks(){
+  let today=getToday();
+
+  // ①締切過ぎ → 削除
+  tasks = tasks.filter(t=>t.end > today);
+
+  // ②過去日は表示しない（dailyRequired削除）
+  tasks.forEach(t=>{
+    Object.keys(t.dailyRequired).forEach(date=>{
+      if(date < today){
+        delete t.dailyRequired[date];
+      }
+    });
+  });
+}
+
+// 0時処理
+function resetAtMidnight(){
+  let today=getToday();
+  if(lastCheckDate!==today){
+
+    tasks.forEach(t=>{
+      t.totalProgress = Object.values(t.dailyProgress).reduce((a,b)=>a+b,0);
+    });
+
+    cleanTasks();
+
+    tasks.forEach(t=>{
+      t.dailyRequired = {};
+      distributeTask(t);
+    });
+
+    localStorage.setItem("lastCheckDate",today);
+    lastCheckDate=today;
+    save();
+  }
+}
+
+function ensureDistribution(){
+  tasks.forEach(t=>{
+    if(Object.keys(t.dailyRequired).length===0){
+      distributeTask(t);
+    }
+  });
+}
+
+function addTask(){
+  if(!name.value||!start.value||!end.value||!pages.value)return;
+
+  let t={
+    name:name.value,
+    subject:subject.value,
+    start:start.value,
+    end:end.value,
+    pages:Number(pages.value),
+    totalProgress:0,
+    dailyProgress:{},
+    dailyRequired:{}
+  };
+
+  distributeTask(t);
+
+  tasks.push(t);
+
+  name.value="";pages.value="";start.value=getToday();
+  save();render();
+}
+
+const name=document.getElementById("name");
+const subject=document.getElementById("subject");
+const start=document.getElementById("start");
+const end=document.getElementById("end");
+const pages=document.getElementById("pages");
+
+function changeView(v){
+  currentView=v;
+  document.querySelectorAll(".nav button").forEach(b=>b.classList.remove("active"));
+  document.getElementById("btn-"+v).classList.add("active");
+  render();
+}
+
+function render(){
+  resetAtMidnight();
+  ensureDistribution();
+  cleanTasks(); // ← 常に実行（スマホでも即反映）
+
+  const view=document.getElementById("view");
+  view.innerHTML="";
+  let today=getToday();
+
+  if(currentView==="today"){
+    view.innerHTML="<h3>今日のタスク</h3>";
+    tasks.forEach((t,i)=>{
+      let max=t.dailyRequired[today]||0;
+      if(max>0){
+        let prog=t.dailyProgress[today]||0;
+        view.appendChild(makeTask(t,i,prog,max,"today",today));
+      }
+    });
+  }
+
+  if(currentView==="deadline"){
+    view.innerHTML="<h3>締切ごと</h3>";
+    let map={};
+    tasks.forEach(t=>{
+      if(!map[t.end]) map[t.end]=[];
+      map[t.end].push(t);
+    });
+
+    Object.keys(map).sort().forEach(date=>{
+      view.innerHTML+="<b>"+date+"</b>";
+      map[date].forEach((t,i)=>{
+        view.appendChild(makeTask(t,i,t.totalProgress,t.pages,"total"));
+      });
+    });
+  }
+
+  if(currentView==="date"){
+    view.innerHTML="<h3>日付ごと</h3>";
+    let dates={};
+
+    tasks.forEach(t=>{
+      let s=new Date(t.start);
+      let e=new Date(endMinusOne(t.end));
+      for(let d=new Date(s);d<=e;d.setDate(d.getDate()+1)){
+        let dateStr=d.toISOString().split("T")[0];
+        if(dateStr >= today){ // ← 過去非表示
+          dates[dateStr]=true;
+        }
+      }
+    });
+
+    Object.keys(dates).sort().forEach(date=>{
+      view.innerHTML+="<b>"+date+"</b>";
+      tasks.forEach((t,i)=>{
+        let max=t.dailyRequired[date]||0;
+        if(max>0){
+          let prog=t.dailyProgress[date]||0;
+          view.appendChild(makeTask(t,i,prog,max,"date",date));
+        }
+      });
+    });
+  }
+}
+
+function makeTask(t,i,value,max,type,date){
+  let div=document.createElement("div");
+  div.className="task";
+
+  let left=document.createElement("div");
+  let isDone=value>=max;
+
+  left.innerHTML=
+    t.subject+" / "+t.name+
+    "<br><span class='small'>"+
+    (isDone?"完了！":"必要: "+max+"ページ")+
+    "</span>";
+
+  let right=document.createElement("div");
+
+  if(type==="total" || type==="date"){
+    let num=document.createElement("span");
+    num.textContent=value;
+    right.append(num);
+  }else{
+    let up=document.createElement("button");
+    up.textContent="▲";
+    up.onclick=()=>changeProgress(t,1,date);
+
+    let num=document.createElement("span");
+    num.textContent=value;
+
+    let down=document.createElement("button");
+    down.textContent="▼";
+    down.onclick=()=>changeProgress(t,-1,date);
+
+    let del=document.createElement("button");
+    del.textContent="×";
+    del.onclick=()=>{tasks.splice(i,1); save(); render();};
+
+    right.append(up,num,down,del);
+  }
+
+  div.append(left,right);
+  return div;
+}
+
+function changeProgress(t,delta,date){
+  let max=t.dailyRequired[date]||0;
+  let v=t.dailyProgress[date]||0;
+  v=Math.max(0,Math.min(max,v+delta));
+  t.dailyProgress[date]=v;
+  t.totalProgress = Object.values(t.dailyProgress).reduce((a,b)=>a+b,0);
+  save();render();
+}
+
+changeView("today");
+</script>
+
+</body>
+</html>
