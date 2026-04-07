@@ -20,8 +20,8 @@ input,select{width:100%;padding:10px;margin-bottom:8px;font-size:16px;border:1px
 .task button{padding:8px 10px;margin-left:5px;font-size:14px;border:none;border-radius:6px;background:#4a90e2;color:white;}
 .task span{margin:0 6px;font-size:16px;}
 .small{font-size:12px;color:#888;}
-.incomplete{color:#d46a6a;} /* くすんだ赤 */
-.complete{color:#6a8cd4;}   /* くすんだ青 */
+.done{color:#5c9ce5;}      /* 完了: 青っぽく */
+.undone{color:#d97b7b;}    /* 未完了: 赤っぽく */
 </style>
 </head>
 
@@ -53,60 +53,109 @@ input,select{width:100%;padding:10px;margin-bottom:8px;font-size:16px;border:1px
 
 <script>
 let tasks = JSON.parse(localStorage.getItem("tasks")||"[]");
-tasks.forEach(t=>{ if(!t.dailyProgress) t.dailyProgress={}; if(!t.dailyRequired) t.dailyRequired={}; t.totalProgress=Object.values(t.dailyProgress).reduce((a,b)=>a+b,0);});
+
+tasks.forEach(t=>{
+  if(!t.dailyProgress) t.dailyProgress={};
+  if(!t.dailyRequired) t.dailyRequired={};
+  t.totalProgress=Object.values(t.dailyProgress).reduce((a,b)=>a+b,0);
+});
 
 let currentView="today";
 let lastCheckDate = localStorage.getItem("lastCheckDate") || getToday();
 
-const name=document.getElementById("name");
-const subject=document.getElementById("subject");
-const start=document.getElementById("start");
-const end=document.getElementById("end");
-const pages=document.getElementById("pages");
-
 document.getElementById("start").value = getToday();
 
-function save(){ localStorage.setItem("tasks",JSON.stringify(tasks)); }
-function getToday(){ return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' }); }
-function endMinusOne(d){ let x=new Date(d); x.setDate(x.getDate()-1); return x.toISOString().split("T")[0]; }
+function save(){
+  localStorage.setItem("tasks",JSON.stringify(tasks));
+}
+
+function getToday(){
+  return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
+}
+
+function endMinusOne(d){
+  let x=new Date(d);
+  x.setDate(x.getDate()-1);
+  return x.toISOString().split("T")[0];
+}
 
 function distributeTask(t){
   let today = getToday();
-  let startDate = today > t.start ? today : t.start;
-  let endDate = endMinusOne(t.end);
+  let start = today > t.start ? today : t.start;
+  let end = endMinusOne(t.end);
+
   let dates=[];
-  for(let d=new Date(startDate);d<=new Date(endDate);d.setDate(d.getDate()+1)){ dates.push(new Date(d).toISOString().split("T")[0]); }
+  for(let d=new Date(start);d<=new Date(end);d.setDate(d.getDate()+1)){
+    dates.push(new Date(d).toISOString().split("T")[0]);
+  }
+
   let done = Object.values(t.dailyProgress).reduce((a,b)=>a+b,0);
   let remaining = t.pages - done;
+
   let days = dates.length;
   if(days<=0) return;
+
   let base = Math.floor(remaining / days);
   let extra = remaining % days;
-  dates.forEach((date,i)=>{ t.dailyRequired[date] = base + (i < extra ? 1 : 0); });
+
+  dates.forEach((date,i)=>{
+    t.dailyRequired[date] = base + (i < extra ? 1 : 0);
+  });
 }
 
 function resetAtMidnight(){
   let today=getToday();
   if(lastCheckDate!==today){
     tasks = tasks.filter(t=>t.end >= today);
-    tasks.forEach(t=>{ t.dailyRequired = {}; distributeTask(t); t.totalProgress = Object.values(t.dailyProgress).reduce((a,b)=>a+b,0); });
+    tasks.forEach(t=>{
+      t.dailyRequired = {};
+      distributeTask(t);
+      t.totalProgress = Object.values(t.dailyProgress).reduce((a,b)=>a+b,0);
+    });
     lastCheckDate = today;
     localStorage.setItem("lastCheckDate",today);
     save();
   }
 }
 
-function ensureDistribution(){ tasks.forEach(t=>{ if(Object.keys(t.dailyRequired).length===0){ distributeTask(t); } }); }
+function ensureDistribution(){
+  tasks.forEach(t=>{
+    if(Object.keys(t.dailyRequired).length===0){
+      distributeTask(t);
+    }
+  });
+}
 
 function addTask(){
   if(!name.value||!start.value||!end.value||!pages.value)return;
-  let t={ name:name.value, subject:subject.value, start:start.value, end:end.value, pages:Number(pages.value), totalProgress:0, dailyProgress:{}, dailyRequired:{} };
+
+  let t={
+    name:name.value,
+    subject:subject.value,
+    start:start.value,
+    end:end.value,
+    pages:Number(pages.value),
+    totalProgress:0,
+    dailyProgress:{},
+    dailyRequired:{}
+  };
+
   distributeTask(t);
   tasks.push(t);
-  name.value=""; pages.value=""; start.value=getToday();
+
+  name.value="";
+  pages.value="";
+  start.value=getToday();
+
   save();
   render();
 }
+
+const name=document.getElementById("name");
+const subject=document.getElementById("subject");
+const start=document.getElementById("start");
+const end=document.getElementById("end");
+const pages=document.getElementById("pages");
 
 function changeView(v){
   currentView=v;
@@ -129,7 +178,8 @@ function render(){
       let max=t.dailyRequired[today]||0;
       if(max>0){
         let prog=t.dailyProgress[today]||0;
-        view.appendChild(makeTask(t,i,prog,max,"today",today));
+        let remaining = t.pages - t.totalProgress + prog;
+        view.appendChild(makeTask(t,i,prog,max,"today",today,remaining));
       }
     });
   }
@@ -137,24 +187,34 @@ function render(){
   if(currentView==="deadline"){
     view.innerHTML="<h3>締切ごと</h3>";
     let map={};
-    tasks.forEach(t=>{ if(!map[t.end]) map[t.end]=[]; map[t.end].push(t); });
+    tasks.forEach(t=>{
+      if(!map[t.end]) map[t.end]=[];
+      map[t.end].push(t);
+    });
+
     Object.keys(map).sort().forEach(date=>{
       view.innerHTML+="<b>"+date+"</b>";
-      map[date].forEach((t,i)=>{ view.appendChild(makeTask(t,i,t.totalProgress,t.pages,"total")); });
+      map[date].forEach((t,i)=>{
+        let done = t.totalProgress >= t.pages;
+        let remaining = t.pages - t.totalProgress;
+        view.appendChild(makeTask(t,i,t.totalProgress,t.pages,"total",null,remaining));
+      });
     });
   }
 
   if(currentView==="date"){
     view.innerHTML="<h3>日付ごと</h3>";
     let dates={};
+
     tasks.forEach(t=>{
       let s=new Date(t.start);
       let e=new Date(endMinusOne(t.end));
       for(let d=new Date(s);d<=e;d.setDate(d.getDate()+1)){
-        let dateStr = d.toISOString().split("T")[0];
-        if(dateStr >= today) dates[dateStr]=true; // 今日より前は表示しない
+        let key = d.toISOString().split("T")[0];
+        if(key >= today) dates[key]=true;
       }
     });
+
     Object.keys(dates).sort().forEach(date=>{
       view.innerHTML+="<b>"+date+"</b>";
       tasks.forEach((t,i)=>{
@@ -168,30 +228,33 @@ function render(){
   }
 }
 
-function makeTask(t,i,value,max,type,date){
+function makeTask(t,i,value,max,type,date,remaining=0){
   let div=document.createElement("div");
   div.className="task";
 
   let left=document.createElement("div");
-  let text = "";
-  let isDone = value >= max;
-
-  let statusText = isDone ? "<span class='complete'>完了</span>" : "<span class='incomplete'>未完了</span>";
+  let text="";
+  let statusText=""; 
+  let statusClass="";
 
   if(type==="total"){
-    let done = t.totalProgress;
-    let isDoneTotal = done >= t.pages;
-    let totalStatus = isDoneTotal ? "<span class='complete'>完了</span>" : "<span class='incomplete'>未完了</span>";
-    text = done + "/" + t.pages + " " + totalStatus;
-  }else if(type==="date"){
+    let isDoneTotal = t.totalProgress >= t.pages;
+    statusText = isDoneTotal ? "完了" : "未完了";
+    statusClass = isDoneTotal ? "done" : "undone";
+    text = t.totalProgress + "/" + t.pages + "　<span class='"+statusClass+"'>"+statusText+"</span>";
+  }
+  else if(type==="date"){
     text = max + "/" + t.pages;
-  }else{
-    let totalDone = t.totalProgress;
+  }
+  else{
+    let isDone = value >= max;
     let extra = isDone ? (value - max) : 0;
-    text = "必要：" + max + "/" + t.pages + " " + statusText + " +" + extra;
+    statusText = isDone ? "完了" : "未完了";
+    statusClass = isDone ? "done" : "undone";
+    text = "必要：" + max + "/" + remaining + "　<span class='"+statusClass+"'>"+statusText+"</span> +" + extra;
   }
 
-  left.innerHTML = t.subject+" / "+t.name+"<br><span class='small'>"+ text +"</span>";
+  left.innerHTML = t.subject+" / "+t.name+"<br><span class='small'>"+text+"</span>";
 
   let right=document.createElement("div");
 
@@ -199,17 +262,17 @@ function makeTask(t,i,value,max,type,date){
     let num=document.createElement("span");
     num.textContent=value;
     right.append(num);
-  }else{
+  } else {
     let up=document.createElement("button");
     up.textContent="▲";
-    up.onclick=()=>changeProgress(t,1,date);
+    up.onclick=()=>changeProgress(t,1,date,remaining);
 
     let num=document.createElement("span");
     num.textContent=value;
 
     let down=document.createElement("button");
     down.textContent="▼";
-    down.onclick=()=>changeProgress(t,-1,date);
+    down.onclick=()=>changeProgress(t,-1,date,remaining);
 
     let del=document.createElement("button");
     del.textContent="×";
@@ -222,9 +285,9 @@ function makeTask(t,i,value,max,type,date){
   return div;
 }
 
-function changeProgress(t,delta,date){
+function changeProgress(t,delta,date,remaining){
   let v=t.dailyProgress[date]||0;
-  v=Math.max(0,Math.min(t.pages,v+delta));
+  v=Math.max(0,Math.min(remaining,v+delta));
   t.dailyProgress[date]=v;
   t.totalProgress=Object.values(t.dailyProgress).reduce((a,b)=>a+b,0);
   save();
