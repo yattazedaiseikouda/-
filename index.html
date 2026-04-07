@@ -220,7 +220,10 @@ function render(){
       let s=new Date(t.start);
       let e=new Date(endMinusOne(t.end));
       for(let d=new Date(s);d<=e;d.setDate(d.getDate()+1)){
-        dates[d.toISOString().split("T")[0]]=true;
+        let dStr = d.toISOString().split("T")[0];
+        if(dStr >= today){ // ← ここが変更点
+          dates[dStr]=true;
+        }
       }
     });
 
@@ -294,7 +297,6 @@ function makeTask(t,i,value,max,type,date){
 
     right.append(up,num,down,del);
 
-    // 上限制御
     if(value >= remaining){
       up.disabled = true;
     }
