@@ -67,16 +67,8 @@ function save(){
   localStorage.setItem("tasks",JSON.stringify(tasks));
 }
 
-// 日本時間
 function getToday(){
-  return new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Tokyo'});
-}
-
-// 日付加算
-function addDays(dateStr,days){
-  let d=new Date(dateStr);
-  d.setDate(d.getDate()+days);
-  return d.toISOString().split("T")[0];
+  return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
 }
 
 function endMinusOne(d){
@@ -85,9 +77,10 @@ function endMinusOne(d){
   return x.toISOString().split("T")[0];
 }
 
-// 分配
 function distributeTask(t){
-  let start = t.start;
+  let today = getToday();
+
+  let start = today > t.start ? today : t.start;
   let end = endMinusOne(t.end);
 
   let dates=[];
@@ -109,17 +102,12 @@ function distributeTask(t){
   });
 }
 
-// 🔥 0時処理（30日ルール追加）
 function resetAtMidnight(){
   let today=getToday();
   if(lastCheckDate!==today){
 
-    // 締切+30日過ぎたら削除
-    tasks = tasks.filter(t=>{
-      return addDays(t.end,30) >= today;
-    });
+    tasks = tasks.filter(t=>t.end >= today);
 
-    // 再配分
     tasks.forEach(t=>{
       t.dailyRequired = {};
       distributeTask(t);
@@ -222,10 +210,7 @@ function render(){
       let s=new Date(t.start);
       let e=new Date(endMinusOne(t.end));
       for(let d=new Date(s);d<=e;d.setDate(d.getDate()+1)){
-        let dateStr=d.toISOString().split("T")[0];
-        if(dateStr >= today){ // 🔥 過去は表示しない
-          dates[dateStr]=true;
-        }
+        dates[d.toISOString().split("T")[0]]=true;
       }
     });
 
@@ -247,13 +232,33 @@ function makeTask(t,i,value,max,type,date){
   div.className="task";
 
   let left=document.createElement("div");
-  let isDone=value>=max;
 
-  left.innerHTML=
+  let text = "";
+
+  if(type==="total"){
+    let done = t.totalProgress;
+    let isDoneTotal = done >= t.pages;
+    text = done + "/" + t.pages + (isDoneTotal ? "　完了" : "　未完了");
+
+  }else if(type==="date"){
+    text = max + "/" + t.pages;
+
+  }else{
+    let isDone = value >= max;
+
+    let totalDone = t.totalProgress;
+    let beforeToday = totalDone - value;
+    let extra = isDone ? (value - max) : 0;
+
+    text =
+      "必要：" + max + "/" + t.pages +
+      " " + (isDone ? "完了" : "未完了") +
+      " +" + extra;
+  }
+
+  left.innerHTML =
     t.subject+" / "+t.name+
-    "<br><span class='small'>"+
-    (isDone?"完了！":"必要: "+max+"ページ")+
-    "</span>";
+    "<br><span class='small'>"+ text +"</span>";
 
   let right=document.createElement("div");
 
@@ -285,10 +290,10 @@ function makeTask(t,i,value,max,type,date){
 }
 
 function changeProgress(t,delta,date){
-  let max=t.dailyRequired[date]||0;
   let v=t.dailyProgress[date]||0;
 
-  v=Math.max(0,Math.min(max,v+delta));
+  // 🔥 合計ページまでOK
+  v=Math.max(0,Math.min(t.pages,v+delta));
 
   t.dailyProgress[date]=v;
   t.totalProgress=Object.values(t.dailyProgress).reduce((a,b)=>a+b,0);
