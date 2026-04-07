@@ -150,7 +150,10 @@ function render(){
     tasks.forEach(t=>{
       let s=new Date(t.start);
       let e=new Date(endMinusOne(t.end));
-      for(let d=new Date(s);d<=e;d.setDate(d.getDate()+1)){ dates[d.toISOString().split("T")[0]]=true; }
+      for(let d=new Date(s);d<=e;d.setDate(d.getDate()+1)){
+        let dateStr = d.toISOString().split("T")[0];
+        if(dateStr >= today) dates[dateStr]=true; // 今日より前は表示しない
+      }
     });
     Object.keys(dates).sort().forEach(date=>{
       view.innerHTML+="<b>"+date+"</b>";
@@ -173,7 +176,6 @@ function makeTask(t,i,value,max,type,date){
   let text = "";
   let isDone = value >= max;
 
-  // ステータス文字だけ色変更
   let statusText = isDone ? "<span class='complete'>完了</span>" : "<span class='incomplete'>未完了</span>";
 
   if(type==="total"){
