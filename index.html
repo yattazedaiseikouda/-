@@ -20,8 +20,9 @@ input,select{width:100%;padding:10px;margin-bottom:8px;font-size:16px;border:1px
 .task button{padding:8px 10px;margin-left:5px;font-size:14px;border:none;border-radius:6px;background:#4a90e2;color:white;}
 .task span{margin:0 6px;font-size:16px;}
 .small{font-size:12px;color:#888;}
-.done{color:#5c9ce5;}      /* 完了: 青っぽく */
-.undone{color:#d97b7b;}    /* 未完了: 赤っぽく */
+.done{color:#5c9ce5;}
+.undone{color:#d97b7b;}
+.group-title{font-weight:bold;margin-top:10px;}
 </style>
 </head>
 
@@ -186,18 +187,34 @@ function render(){
 
   if(currentView==="deadline"){
     view.innerHTML="<h3>締切ごと</h3>";
-    let map={};
+
+    let undoneMap={};
+    let doneMap={};
+
     tasks.forEach(t=>{
-      if(!map[t.end]) map[t.end]=[];
-      map[t.end].push(t);
+      let isDone = t.totalProgress >= t.pages;
+      let target = isDone ? doneMap : undoneMap;
+
+      if(!target[t.end]) target[t.end]=[];
+      target[t.end].push(t);
     });
 
-    Object.keys(map).sort().forEach(date=>{
+    // 未完了
+    view.innerHTML += "<div class='group-title'>未完了</div>";
+    Object.keys(undoneMap).sort().forEach(date=>{
       view.innerHTML+="<b>"+date+"</b>";
-      map[date].forEach((t,i)=>{
-        let done = t.totalProgress >= t.pages;
+      undoneMap[date].forEach((t,i)=>{
         let remaining = t.pages - t.totalProgress;
         view.appendChild(makeTask(t,i,t.totalProgress,t.pages,"total",null,remaining));
+      });
+    });
+
+    // 完了
+    view.innerHTML += "<div class='group-title'>完了</div>";
+    Object.keys(doneMap).sort().forEach(date=>{
+      view.innerHTML+="<b>"+date+"</b>";
+      doneMap[date].forEach((t,i)=>{
+        view.appendChild(makeTask(t,i,t.totalProgress,t.pages,"total"));
       });
     });
   }
