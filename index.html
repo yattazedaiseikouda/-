@@ -187,6 +187,7 @@ function render(){
 
   if(currentView==="deadline"){
     view.innerHTML="<h3>締切ごと</h3>";
+
     let undoneMap={};
     let doneMap={};
 
@@ -198,6 +199,7 @@ function render(){
       target[t.end].push(t);
     });
 
+    // 未完了
     view.innerHTML += "<div class='group-title'>未完了</div>";
     Object.keys(undoneMap).sort().forEach(date=>{
       view.innerHTML+="<b>"+date+"</b>";
@@ -207,6 +209,7 @@ function render(){
       });
     });
 
+    // 完了
     view.innerHTML += "<div class='group-title'>完了</div>";
     Object.keys(doneMap).sort().forEach(date=>{
       view.innerHTML+="<b>"+date+"</b>";
@@ -248,21 +251,23 @@ function makeTask(t,i,value,max,type,date,remaining=0){
 
   let left=document.createElement("div");
   let text="";
+  let statusText=""; 
+  let statusClass="";
 
   if(type==="total"){
     let isDoneTotal = t.totalProgress >= t.pages;
-    let statusText = isDoneTotal ? "完了" : "未完了";
-    let statusClass = isDoneTotal ? "done" : "undone";
+    statusText = isDoneTotal ? "完了" : "未完了";
+    statusClass = isDoneTotal ? "done" : "undone";
     text = t.totalProgress + "/" + t.pages + "　<span class='"+statusClass+"'>"+statusText+"</span>";
   }
   else if(type==="date"){
-    text = "必要：" + max;
+    text = max + "/" + t.pages;
   }
   else{
     let isDone = value >= max;
     let extra = isDone ? (value - max) : 0;
-    let statusText = isDone ? "完了" : "未完了";
-    let statusClass = isDone ? "done" : "undone";
+    statusText = isDone ? "完了" : "未完了";
+    statusClass = isDone ? "done" : "undone";
     text = "必要：" + max + "/" + remaining + "　<span class='"+statusClass+"'>"+statusText+"</span> +" + extra;
   }
 
